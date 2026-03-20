@@ -66,7 +66,7 @@ public class AdminController {
 //        return ResponseEntity.ok(new ApiResponse("Delivery Boy assigned successfully", null));
 //    }
 
-    // 🗑️ DELETE METHODS (DELETE)
+    // DELETE METHODS (DELETE)
     @DeleteMapping("/customer/{id}")
     public ResponseEntity<ApiResponse> deleteCustomer(@PathVariable Long id) {
         customerService.delete(id); 

@@ -3,6 +3,7 @@ package com.example.tiffin_center_management.model;
 import java.util.List;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
@@ -13,6 +14,8 @@ import lombok.ToString;
 @Entity
 @Table(name="customers")
 @Data
+@EqualsAndHashCode(callSuper = true) // Lombok fix for inheritance
+@DiscriminatorValue("CUSTOMER")
 public class Customer extends BaseUser{
 
 	private String phone;

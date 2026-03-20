@@ -31,6 +31,13 @@ public class JwtFilter extends OncePerRequestFilter{
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
+    	// 1. Agar request Auth endpoints ki hai, toh filter ko bypass karo
+        String path = request.getServletPath();
+        if (path.startsWith("/api/auth/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+    	
         String token = null;
         String email = null;
 
@@ -61,9 +68,11 @@ public class JwtFilter extends OncePerRequestFilter{
         // Set authentication
         if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
+        	
+        	if (jwtUtil.validateToken(token, email)) {
             UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-            if (jwtUtil.validateToken(token, email)) {
+//            if (jwtUtil.validateToken(token, email)) {
 
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
