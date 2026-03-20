@@ -11,6 +11,8 @@ import com.example.tiffin_center_management.model.BaseUser;
 @Repository
 public interface AdminRepository extends JpaRepository<Admin, Long>{
 
-	Optional<? extends BaseUser> findByEmail(String email);
+	// Admin specific email search (agar kabhi zaroorat pade)
+    Optional<Admin> findByEmail(String email);
+//	Optional<? extends BaseUser> findByEmail(String email);
 
 }

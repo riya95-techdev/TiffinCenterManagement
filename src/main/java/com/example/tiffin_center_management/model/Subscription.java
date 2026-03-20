@@ -10,6 +10,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 @Entity
 @Table(name="subscriptions")
@@ -23,10 +25,14 @@ public class Subscription {
     // 🔗 Relationships
     @ManyToOne
     @JoinColumn(name = "customer_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Customer customer;
 
     @ManyToOne
     @JoinColumn(name = "delivery_boy_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private DeliveryBoy deliveryBoy;
 
     // 📅 Business fields

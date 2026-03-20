@@ -25,5 +25,7 @@ public interface AdminService {
     void deleteDeliveryBoy(Long id);
 
     void deleteSubscription(Long id);
+    
+    void assignDeliveryBoy(Long subId, Long deliveryBoyId);
 	
 }

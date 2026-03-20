@@ -2,6 +2,7 @@ package com.example.tiffin_center_management.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,29 +23,34 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/customer")
 public class CustomerContoller {
 
-	@Autowired
 	private final CustomerService service;
 
-    // CREATE
-    @PostMapping
-    public CustomerDTO create(@RequestBody CustomerDTO dto) {
-        return service.create(dto);
-    }
+//    // CREATE
+//    @PostMapping("/register")
+//    public CustomerDTO create(@RequestBody CustomerDTO dto) {
+//        return service.create(dto);
+//    }
 
     // READ ALL (pagination)
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
-    public Page<CustomerDTO> getAll(@RequestParam int page,
-                                   @RequestParam int size) {
-        return service.getAll(page, size);
+    public Page<CustomerDTO> getAll(@RequestParam(defaultValue ="0") int page,
+                                   @RequestParam(defaultValue = "10") int size,
+                                   @RequestParam(defaultValue = "id") String sortBy,
+                           	    @RequestParam(defaultValue = "asc") String sortDir) {
+        return service.getAll(page, size,sortBy,sortDir);
     }
 
-    // READ ONE
+    // CUSTOMER APNI PROFILE KHID BS DEKHE OR ADMIN TO FIR DEKH HI SKTA H 
+    @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
     @GetMapping("/{id}")
     public CustomerDTO getById(@PathVariable Long id) {
         return service.getById(id);
     }
 
-    // UPDATE
+    // UPDATE:USER/CUSTOMER APNI PROFILE KHUD UPDATE KR SKE 
+ 
+    @PreAuthorize("hasRole('CUSTOMER','ADMIN')")
     @PutMapping("/{id}")
     public CustomerDTO update(@PathVariable Long id,
                               @RequestBody CustomerDTO dto) {
@@ -52,6 +58,8 @@ public class CustomerContoller {
     }
 
     // DELETE
+ // Baaki DELETE sirf ADMIN ke paas hona chahiye
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public String delete(@PathVariable Long id) {
         service.delete(id);

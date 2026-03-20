@@ -1,8 +1,5 @@
 package com.example.tiffin_center_management.service;
 
-import java.util.List;
-import java.util.Map;
-
 import org.springframework.data.domain.Page;
 
 import com.example.tiffin_center_management.payload.SubscriptionDTO;
@@ -24,5 +21,6 @@ public interface SubscriptionService {
     Page<SubscriptionDTO> getByDeliveryBoy(Long deliveryBoyId, int page, int size);
 
     void markDelivered(Long id);
-	
+    
+    void assignDeliveryBoy(Long subId, Long deliveryBoyId);
 }

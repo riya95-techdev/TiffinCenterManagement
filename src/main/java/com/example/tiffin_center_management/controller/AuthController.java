@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -69,10 +70,20 @@ public class AuthController {
     }
 
     @PostMapping("/signout")
-    public ResponseEntity<ApiResponse> logout(HttpServletResponse response) {
+    public ResponseEntity<ApiResponse> logout(@CookieValue(name="jwt",required=false) String token ,HttpServletResponse response) {
 
+    	// Agar token null hai, matlab user logged in hi nahi hai
+        if (token == null || token.isEmpty()) {
+            return ResponseEntity.status(401)
+                    .body(new ApiResponse("You are not logged in!", null));
+        }
+
+        // Agar token hai, toh cookie clear karein
         ResponseCookie cookie = ResponseCookie.from("jwt", "")
-                .maxAge(0)
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(0) // Expire immediately
                 .build();
 
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());

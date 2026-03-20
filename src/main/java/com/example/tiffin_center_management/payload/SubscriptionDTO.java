@@ -10,20 +10,14 @@ import lombok.Data;
 public class SubscriptionDTO {
 
 	private Long id;
-
     @NotNull(message = "Customer ID required")
     private Long customerId;
-
     private Long deliveryBoyId;
-
     @NotBlank(message = "Plan required")
     private String plan; // Monthly / Weekly
-
     private double price;
-
     private LocalDate startDate;
     private LocalDate endDate;
-
     private String status; // ACTIVE / CANCELLED / COMPLETED
 	
 }

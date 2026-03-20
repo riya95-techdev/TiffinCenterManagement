@@ -1,10 +1,14 @@
 package com.example.tiffin_center_management.service;
 
+import java.util.List;
+
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.tiffin_center_management.exception.ResourceNotFoundException;
 import com.example.tiffin_center_management.model.Customer;
@@ -19,128 +23,363 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class SubscriptionServiceImpl implements SubscriptionService{
+public class SubscriptionServiceImpl implements SubscriptionService {
 
-	 private final SubscriptionRepository repo;
-	    private final CustomerRepository customerRepo;
-	    private final DeliveryBoyRepository deliveryRepo;
-	    private final ModelMapper mapper;
+    private final SubscriptionRepository subscriptionRepo;
+    private final CustomerRepository customerRepo;
+    private final DeliveryBoyRepository deliveryRepo;
+    private final ModelMapper mapper;
 
-	    // ✅ CREATE
-	    @Override
-	    public SubscriptionDTO create(SubscriptionDTO dto) {
+    @Override
+    @Transactional
+    public SubscriptionDTO create(SubscriptionDTO dto) {
+        // 1. Check if Customer already has an ACTIVE or PENDING subscription
+        // Ek customer ek baar mein ek hi tiffin khayega
+        List<Subscription> existingSubs = subscriptionRepo.findByCustomerId(dto.getCustomerId(), Pageable.unpaged()).getContent();
+        boolean hasActivePlan = existingSubs.stream()
+                .anyMatch(s -> "ACTIVE".equals(s.getStatus()) || "PENDING".equals(s.getStatus()));
 
-	        Subscription sub = new Subscription();
+        if (hasActivePlan) {
+            throw new RuntimeException("Customer already has an active or pending subscription!");
+        }
 
-	        Customer customer = customerRepo.findById(dto.getCustomerId())
-	                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+        Customer customer = customerRepo.findById(dto.getCustomerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", dto.getCustomerId()));
 
-	        sub.setCustomer(customer);
+        Subscription subscription = mapper.map(dto, Subscription.class);
+        subscription.setCustomer(customer);
+        subscription.setDeliveryBoy(null); 
+        subscription.setStatus("PENDING");
 
-	        // optional delivery boy
-	        if (dto.getDeliveryBoyId() != null) {
-	            DeliveryBoy db = deliveryRepo.findById(dto.getDeliveryBoyId())
-	                    .orElseThrow(() -> new ResourceNotFoundException("DeliveryBoy not found"));
-	            sub.setDeliveryBoy(db);
-	        }
+        Subscription savedSub = subscriptionRepo.save(subscription);
+        return mapper.map(savedSub, SubscriptionDTO.class);
+    }
+    
+//    @Override
+//    public SubscriptionDTO create(SubscriptionDTO dto) {
+//        // 1. Customer ko dhoondo (Check if exists)
+//        Customer customer = customerRepo.findById(dto.getCustomerId())
+//                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", dto.getCustomerId()));
+//
+//        // 2. DTO ko Entity mein badlo
+//        Subscription subscription = mapper.map(dto, Subscription.class);
+//
+//        // 3. Manual Business Logic: Status PENDING aur DeliveryBoy NULL
+//        subscription.setCustomer(customer);
+//        subscription.setDeliveryBoy(null); // Initial level par null
+//        subscription.setStatus("PENDING");
+//
+//        // 4. Save to Database
+//        Subscription savedSub = subscriptionRepo.save(subscription);
+//
+//        // 5. Wapas DTO mein badal kar return karo
+//        return mapper.map(savedSub, SubscriptionDTO.class);
+//    }
+    
+//    // ✅ CREATE (Corrected Logic)
+//    @Override
+//    @Transactional
+//    public SubscriptionDTO create(SubscriptionDTO dto) {
+//        Subscription sub = new Subscription();
+//
+//        Customer customer = customerRepo.findById(dto.getCustomerId())
+//                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + dto.getCustomerId()));
+//
+//        sub.setCustomer(customer);
+//        sub.setPlan(dto.getPlan());
+//        sub.setPrice(dto.getPrice());
+//        sub.setStartDate(dto.getStartDate());
+//        sub.setEndDate(dto.getEndDate());
+//
+//        // Logic: Agar create karte waqt deliveryBoyId nahi hai, toh status PENDING rakho
+//        if (dto.getDeliveryBoyId() != null) {
+//            DeliveryBoy db = deliveryRepo.findById(dto.getDeliveryBoyId())
+//                    .orElseThrow(() -> new ResourceNotFoundException("DeliveryBoy not found"));
+//            sub.setDeliveryBoy(db);
+//            sub.setStatus("ACTIVE");
+//        } else {
+//            sub.setStatus("PENDING"); // New subscription is usually pending assignment
+//        }
+//
+//        return mapper.map(subscriptionRepo.save(sub), SubscriptionDTO.class);
+//    }
 
-	        sub.setPlan(dto.getPlan());
-	        sub.setPrice(dto.getPrice());
-	        sub.setStartDate(dto.getStartDate());
-	        sub.setEndDate(dto.getEndDate());
-	        sub.setStatus("ACTIVE");
+    // ✅ GET ALL
+    @Override
+    public Page<SubscriptionDTO> getAll(int page, int size, String sortBy, String sortDir) {
+        Pageable pageable = PageRequest.of(page, size);
+        return subscriptionRepo.findAll(pageable)
+                .map(sub -> mapper.map(sub, SubscriptionDTO.class));
+    }
 
-	        return mapper.map(repo.save(sub), SubscriptionDTO.class);
-	    }
+    // ✅ GET BY ID
+    @Override
+    public SubscriptionDTO getById(Long id) {
+        Subscription sub = subscriptionRepo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found with id: " + id));
+        return mapper.map(sub, SubscriptionDTO.class);
+    }
 
-	    // ✅ GET ALL
-	    @Override
-	    public Page<SubscriptionDTO> getAll(int page, int size, String sortBy, String sortDir) {
+    // ✅ UPDATE
+    @Override
+    @Transactional
+    public SubscriptionDTO update(Long id, SubscriptionDTO dto) {
+        Subscription sub = subscriptionRepo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
-	        Pageable pageable = PageRequest.of(page, size);
+        Customer customer = customerRepo.findById(dto.getCustomerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+        
+        sub.setCustomer(customer);
+        sub.setPlan(dto.getPlan());
+        sub.setPrice(dto.getPrice());
+        sub.setStartDate(dto.getStartDate());
+        sub.setEndDate(dto.getEndDate());
+        sub.setStatus(dto.getStatus());
 
-	        return repo.findAll(pageable)
-	                .map(sub -> mapper.map(sub, SubscriptionDTO.class));
-	    }
+        if (dto.getDeliveryBoyId() != null) {
+            DeliveryBoy db = deliveryRepo.findById(dto.getDeliveryBoyId())
+                    .orElseThrow(() -> new ResourceNotFoundException("DeliveryBoy not found"));
+            sub.setDeliveryBoy(db);
+        } else {
+            sub.setDeliveryBoy(null);
+        }
 
-	    // ✅ GET BY ID
-	    @Override
-	    public SubscriptionDTO getById(Long id) {
+        return mapper.map(subscriptionRepo.save(sub), SubscriptionDTO.class);
+    }
 
-	        Subscription sub = repo.findById(id)
-	                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+    // ✅ DELETE
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        Subscription sub = subscriptionRepo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+        subscriptionRepo.delete(sub);
+    }
 
-	        return mapper.map(sub, SubscriptionDTO.class);
-	    }
+    // ✅ GET BY CUSTOMER
+    @Override
+    public Page<SubscriptionDTO> getByCustomer(Long customerId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return subscriptionRepo.findByCustomerId(customerId, pageable)
+                .map(sub -> mapper.map(sub, SubscriptionDTO.class));
+    }
 
-	    // ✅ UPDATE
-	    @Override
-	    public SubscriptionDTO update(Long id, SubscriptionDTO dto) {
+    // ✅ GET BY DELIVERY BOY
+    @Override
+    public Page<SubscriptionDTO> getByDeliveryBoy(Long deliveryBoyId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return subscriptionRepo.findByDeliveryBoyCustom(deliveryBoyId, pageable)
+                .map(sub -> mapper.map(sub, SubscriptionDTO.class));
+    }
 
-	        Subscription sub = repo.findById(id)
-	                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+    // ✅ MARK DELIVERED
+    @Override
+    @Transactional
+    public void markDelivered(Long id) {
+        Subscription sub = subscriptionRepo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+     // 2. Currently logged-in user ki email nikalo (SecurityContext se)
+        String currentUserEmail = SecurityContextHolder.getContext().getAuthentication().getName();
+        
+        if (sub.getDeliveryBoy() == null) {
+            throw new RuntimeException("No delivery boy assigned to this subscription yet!");
+        }
+     // 3. Check karo: Kya ye wahi Delivery Boy hai jise task assign hua tha?
+        // subscription.getDb().getEmail() humein batayega assigned boy kaun hai
+        if (!sub.getDeliveryBoy().getEmail().equals(currentUserEmail)) {
+            throw new RuntimeException("Security Alert: You are not authorized to deliver this tiffin!");
+        }
+        
+        if (!"ACTIVE".equals(sub.getStatus())) {
+            throw new RuntimeException("Tiffin cannot be delivered! Current status is: " + sub.getStatus());
+        }
+        sub.setStatus("COMPLETED"); 
+        subscriptionRepo.save(sub);
+    }
+    
+    // ✅ ASSIGN DELIVERY BOY (Status update added)
+    @Override
+    @Transactional
+    public void assignDeliveryBoy(Long subId, Long deliveryBoyId) {
+        Subscription sub = subscriptionRepo.findById(subId)
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
-	        // update customer
-	        Customer customer = customerRepo.findById(dto.getCustomerId())
-	                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
-	        sub.setCustomer(customer);
+        DeliveryBoy db = deliveryRepo.findById(deliveryBoyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Delivery Boy not found"));
 
-	        // update delivery boy (optional)
-	        if (dto.getDeliveryBoyId() != null) {
-	            DeliveryBoy db = deliveryRepo.findById(dto.getDeliveryBoyId())
-	                    .orElseThrow(() -> new ResourceNotFoundException("DeliveryBoy not found"));
-	            sub.setDeliveryBoy(db);
-	        }
+        if (!db.isAvailable()) {
+            throw new IllegalArgumentException("Delivery Boy is currently not available");
+        }
 
-	        sub.setPlan(dto.getPlan());
-	        sub.setPrice(dto.getPrice());
-	        sub.setStartDate(dto.getStartDate());
-	        sub.setEndDate(dto.getEndDate());
-	        sub.setStatus(dto.getStatus());
-
-	        return mapper.map(repo.save(sub), SubscriptionDTO.class);
-	    }
-
-	    // ✅ DELETE
-	    @Override
-	    public void delete(Long id) {
-
-	        Subscription sub = repo.findById(id)
-	                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
-
-	        repo.delete(sub);
-	    }
-
-	    // ✅ GET BY CUSTOMER
-	    @Override
-	    public Page<SubscriptionDTO> getByCustomer(Long customerId, int page, int size) {
-
-	        Pageable pageable = PageRequest.of(page, size);
-
-	        return repo.findByCustomerId(customerId, pageable)
-	                .map(sub -> mapper.map(sub, SubscriptionDTO.class));
-	    }
-
-	    // ✅ GET BY DELIVERY BOY
-	    @Override
-	    public Page<SubscriptionDTO> getByDeliveryBoy(Long deliveryBoyId, int page, int size) {
-
-	        Pageable pageable = PageRequest.of(page, size);
-
-	        return repo.findByDeliveryBoyId(deliveryBoyId, pageable)
-	                .map(sub -> mapper.map(sub, SubscriptionDTO.class));
-	    }
-
-	    // ✅ MARK DELIVERED
-	    @Override
-	    public void markDelivered(Long id) {
-
-	        Subscription sub = repo.findById(id)
-	                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
-
-	        sub.setStatus("COMPLETED");
-
-	        repo.save(sub);
-	    }
-	
+        sub.setDeliveryBoy(db);
+        sub.setStatus("ACTIVE"); // Jab assign ho jaye toh ACTIVE kar do
+        subscriptionRepo.save(sub);
+    }
 }
+
+//package com.example.tiffin_center_management.service;
+//
+//import org.modelmapper.ModelMapper;
+//import org.springframework.data.domain.Page;
+//import org.springframework.data.domain.PageRequest;
+//import org.springframework.data.domain.Pageable;
+//import org.springframework.stereotype.Service;
+//
+//import com.example.tiffin_center_management.exception.ResourceNotFoundException;
+//import com.example.tiffin_center_management.model.Customer;
+//import com.example.tiffin_center_management.model.DeliveryBoy;
+//import com.example.tiffin_center_management.model.Subscription;
+//import com.example.tiffin_center_management.payload.SubscriptionDTO;
+//import com.example.tiffin_center_management.repository.CustomerRepository;
+//import com.example.tiffin_center_management.repository.DeliveryBoyRepository;
+//import com.example.tiffin_center_management.repository.SubscriptionRepository;
+//
+//import lombok.RequiredArgsConstructor;
+//
+//@Service
+//@RequiredArgsConstructor
+//public class SubscriptionServiceImpl implements SubscriptionService{
+//
+//	 private final SubscriptionRepository subscriptionRepo;
+//	    private final CustomerRepository customerRepo;
+//	    private final DeliveryBoyRepository deliveryRepo;
+//	    private final ModelMapper mapper;
+//
+//	    // ✅ CREATE
+//	    @Override
+//	    public SubscriptionDTO create(SubscriptionDTO dto) {
+//
+//	        Subscription sub = new Subscription();
+//
+//	        Customer customer = customerRepo.findById(dto.getCustomerId())
+//	                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+//
+//	        sub.setCustomer(customer);
+//
+//	        // optional delivery boy
+//	        if (dto.getDeliveryBoyId() != null) {
+//	            DeliveryBoy db = deliveryRepo.findById(dto.getDeliveryBoyId())
+//	                    .orElseThrow(() -> new ResourceNotFoundException("DeliveryBoy not found"));
+//	            sub.setDeliveryBoy(db);
+//	        }
+//
+//	        sub.setPlan(dto.getPlan());
+//	        sub.setPrice(dto.getPrice());
+//	        sub.setStartDate(dto.getStartDate());
+//	        sub.setEndDate(dto.getEndDate());
+//	        sub.setStatus("ACTIVE");
+//
+//	        return mapper.map(subscriptionRepo.save(sub), SubscriptionDTO.class);
+//	    }
+//
+//	    // ✅ GET ALL
+//	    @Override
+//	    public Page<SubscriptionDTO> getAll(int page, int size, String sortBy, String sortDir) {
+//
+//	        Pageable pageable = PageRequest.of(page, size);
+//
+//	        return subscriptionRepo.findAll(pageable)
+//	                .map(sub -> mapper.map(sub, SubscriptionDTO.class));
+//	    }
+//
+//	    // ✅ GET BY ID
+//	    @Override
+//	    public SubscriptionDTO getById(Long id) {
+//
+//	        Subscription sub = subscriptionRepo.findById(id)
+//	                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+//
+//	        return mapper.map(sub, SubscriptionDTO.class);
+//	    }
+//
+//	    // ✅ UPDATE
+//	    @Override
+//	    public SubscriptionDTO update(Long id, SubscriptionDTO dto) {
+//
+//	        Subscription sub = subscriptionRepo.findById(id)
+//	                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+//
+//	        // update customer
+//	        Customer customer = customerRepo.findById(dto.getCustomerId())
+//	                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+//	        sub.setCustomer(customer);
+//
+//	        // update delivery boy (optional)
+//	        if (dto.getDeliveryBoyId() != null) {
+//	            DeliveryBoy db = deliveryRepo.findById(dto.getDeliveryBoyId())
+//	                    .orElseThrow(() -> new ResourceNotFoundException("DeliveryBoy not found"));
+//	            sub.setDeliveryBoy(db);
+//	        }
+//
+//	        sub.setPlan(dto.getPlan());
+//	        sub.setPrice(dto.getPrice());
+//	        sub.setStartDate(dto.getStartDate());
+//	        sub.setEndDate(dto.getEndDate());
+//	        sub.setStatus(dto.getStatus());
+//
+//	        return mapper.map(subscriptionRepo.save(sub), SubscriptionDTO.class);
+//	    }
+//
+//	    // ✅ DELETE
+//	    @Override
+//	    public void delete(Long id) {
+//
+//	        Subscription sub = subscriptionRepo.findById(id)
+//	                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+//
+//	        subscriptionRepo.delete(sub);
+//	    }
+//
+//	    // ✅ GET BY CUSTOMER
+//	    @Override
+//	    public Page<SubscriptionDTO> getByCustomer(Long customerId, int page, int size) {
+//
+//	        Pageable pageable = PageRequest.of(page, size);
+//
+//	        return subscriptionRepo.findByCustomerId(customerId, pageable)
+//	                .map(sub -> mapper.map(sub, SubscriptionDTO.class));
+//	    }
+//
+//	    // ✅ GET BY DELIVERY BOY
+//	    @Override
+//	    public Page<SubscriptionDTO> getByDeliveryBoy(Long deliveryBoyId, int page, int size) {
+//
+//	        Pageable pageable = PageRequest.of(page, size);
+//
+//	        return subscriptionRepo.findByDeliveryBoyId(deliveryBoyId, pageable)
+//	                .map(sub -> mapper.map(sub, SubscriptionDTO.class));
+//	    }
+//
+//	    // ✅ MARK DELIVERED
+//	    @Override
+//	    public void markDelivered(Long id) {
+//
+//	        Subscription sub = subscriptionRepo.findById(id)
+//	                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+//
+//	        sub.setStatus("COMPLETED");
+//
+//	        subscriptionRepo.save(sub);
+//	    }
+//	    
+//	    @Override
+//	    public void assignDeliveryBoy(Long subId, Long deliveryBoyId) {
+//	        // 1. Subscription dhundo
+//	        Subscription sub = subscriptionRepo.findById(subId)
+//	                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+//
+//	        // 2. Delivery Boy dhundo
+//	        DeliveryBoy db = deliveryRepo.findById(deliveryBoyId)
+//	                .orElseThrow(() -> new ResourceNotFoundException("Delivery Boy not found"));
+//
+//	        // 3. Check karo kya delivery boy available hai (Aapne model me available field rakha hai)
+//	        if (!db.isAvailable()) {
+//	            throw new IllegalArgumentException("Delivery Boy is currently not available");
+//	        }
+//
+//	        // 4. Map kar do aur save karo
+//	        sub.setDeliveryBoy(db);
+//	        subscriptionRepo.save(sub);
+//	    }
+//}

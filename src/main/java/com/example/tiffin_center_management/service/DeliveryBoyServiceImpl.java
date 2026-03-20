@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.example.tiffin_center_management.exception.ResourceNotFoundException;
@@ -31,16 +32,27 @@ public class DeliveryBoyServiceImpl implements DeliveryBoyService
         DeliveryBoy saved = repository.save(entity);
         return mapper.map(saved, DeliveryBoyDTO.class);
     }
-
-    // ✅ GET ALL (Pagination)
+    
     @Override
-    public Page<DeliveryBoyDTO> getAll(int page, int size, String sortBy,String sortDir) {
-
-        Pageable pageable = PageRequest.of(page, size);
-
-        return repository.findAll(pageable)
-                .map(entity -> mapper.map(entity, DeliveryBoyDTO.class));
+    public Page<DeliveryBoyDTO> getAll(int page, int size, String sortBy, String sortDir) {
+        // 1. Pagination set karein
+        Sort sort = sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+        
+        // 2. Nayi query call karein (taaki Customer na aayein isme)
+        return repository.findAllDeliveryBoys(pageable)
+                .map(db -> mapper.map(db, DeliveryBoyDTO.class));
     }
+
+//    // ✅ GET ALL (Pagination)
+//    @Override
+//    public Page<DeliveryBoyDTO> getAll(int page, int size, String sortBy,String sortDir) {
+//
+//        Pageable pageable = PageRequest.of(page, size);
+//
+//        return repository.findAll(pageable)
+//                .map(entity -> mapper.map(entity, DeliveryBoyDTO.class));
+//    }
 
     // ✅ GET BY ID
     @Override
@@ -74,7 +86,7 @@ public class DeliveryBoyServiceImpl implements DeliveryBoyService
     public void delete(Long id) {
 
         DeliveryBoy entity = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("DeliveryBoy not found with id " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("DeliveryBoy", "id", id));
 
         repository.delete(entity);
     }

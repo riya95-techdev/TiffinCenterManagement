@@ -1,69 +1,116 @@
 package com.example.tiffin_center_management.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.tiffin_center_management.exception.EmailAlreadyExistsException;
+import com.example.tiffin_center_management.exception.InvalidCredentialsException;
 import com.example.tiffin_center_management.model.Admin;
 import com.example.tiffin_center_management.model.BaseUser;
 import com.example.tiffin_center_management.model.Customer;
 import com.example.tiffin_center_management.model.DeliveryBoy;
 import com.example.tiffin_center_management.payload.LoginRequest;
 import com.example.tiffin_center_management.payload.SignupRequest;
+import com.example.tiffin_center_management.repository.AdminRepository;
 import com.example.tiffin_center_management.repository.BaseUserRepository;
+import com.example.tiffin_center_management.repository.CustomerRepository;
+import com.example.tiffin_center_management.repository.DeliveryBoyRepository;
 import com.example.tiffin_center_management.util.JwtUtil;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService{
 
-	@Autowired
+	
 	private final BaseUserRepository userRepo;
-	@Autowired
+	private final AdminRepository adminRepo;
+    private final CustomerRepository customerRepo;
+    private final DeliveryBoyRepository deliveryRepo;
     private final PasswordEncoder encoder;
-	@Autowired
     private final JwtUtil jwtUtil;
 
     @Override
+    @Transactional // Transactional lagana zaroori hai
     public void signup(SignupRequest req) {
 
-    	if (userRepo.findByEmail(req.getEmail()).isPresent()) {
+        if (userRepo.findByEmail(req.getEmail()).isPresent()) {
             throw new EmailAlreadyExistsException("Email already registered");
         }
-    	
-        BaseUser user;
 
-        switch (req.getRole()) {
-            case "ADMIN":
-                user = new Admin();
-                break;
-            case "DELIVERY":
-                user = new DeliveryBoy();
-                break;
-            default:
-                user = new Customer();
+        String role = req.getRole().toUpperCase();
+
+        if (!role.equals("ADMIN") && !role.equals("CUSTOMER") && !role.equals("DELIVERY")) {
+            throw new IllegalArgumentException("Invalid Role! Only ADMIN, CUSTOMER, or DELIVERY allowed.");
         }
+        
+        if (role.equals("ADMIN")) {
+            Admin admin = new Admin();
+            setCommonFields(admin, req);
+            adminRepo.save(admin); // Admin repo me save karo
+        } 
+        else if (role.equals("DELIVERY")) {
+            DeliveryBoy db = new DeliveryBoy();
+            setCommonFields(db, req);
+            db.setAvailable(true); // Default available rakho
+            db.setActive(true);
+            // Agar SignupRequest me phone/address hai toh yahan set karein
+            deliveryRepo.save(db); // Delivery repo me save karo
+        } 
+        else {
+            Customer customer = new Customer();
+            setCommonFields(customer, req);
+            customer.setActive(true);
+            customerRepo.save(customer); // Customer repo me save karo
+        }
+    }
 
+    // Common fields set karne ke liye helper method
+    private void setCommonFields(BaseUser user, SignupRequest req) {
         user.setName(req.getName());
         user.setEmail(req.getEmail());
         user.setPassword(encoder.encode(req.getPassword()));
-        user.setRole(req.getRole());
-
-        userRepo.save(user);
+        user.setRole(req.getRole().toUpperCase());
     }
+    
+//    @Override
+//    public void signup(SignupRequest req) {
+//
+//    	if (userRepo.findByEmail(req.getEmail()).isPresent()) {
+//            throw new EmailAlreadyExistsException("Email already registered");
+//        }
+//    	
+//        BaseUser user;
+//
+//        switch (req.getRole()) {
+//            case "ADMIN":
+//                user = new Admin();
+//                break;
+//            case "DELIVERY":
+//                user = new DeliveryBoy();
+//                break;
+//            default:
+//                user = new Customer();
+//        }
+//
+//        user.setName(req.getName());
+//        user.setEmail(req.getEmail());
+//        user.setPassword(encoder.encode(req.getPassword()));
+//        user.setRole(req.getRole());
+//
+//        userRepo.save(user);
+//    }
 
     @Override
-    public String login(LoginRequest
-    		req) {
+    public String login(LoginRequest req) {
 
         BaseUser user = userRepo.findByEmail(req.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
 
         if (!encoder.matches(req.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid email or password");
+            throw new InvalidCredentialsException("Invalid email or password");
         }
 
         return jwtUtil.generateToken(user.getEmail());

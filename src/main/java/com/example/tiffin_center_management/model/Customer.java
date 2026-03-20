@@ -7,6 +7,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 @Entity
 @Table(name="customers")
@@ -20,6 +22,8 @@ public class Customer extends BaseUser{
     private boolean active;
 
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL)
+    @ToString.Exclude 
+    @EqualsAndHashCode.Exclude
     private List<Subscription> subscriptions;
 	
 }

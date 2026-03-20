@@ -19,6 +19,6 @@ public interface CustomerService {
     void delete(Long id);
     void deleteBulk(List<Long> ids);
     List<CustomerDTO> search(String keyword);
-	Page<CustomerDTO> getAll(int page, int size);
+//	Page<CustomerDTO> getAll(int page, int size);
 	
 }

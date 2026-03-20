@@ -47,9 +47,9 @@ public class CustomerServiceImpl implements CustomerService{
         Sort sort = sortDir.equals("asc") ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
 
-        Pageable pageable = PageRequest.of(page, size, sort);
+        Pageable pageable = PageRequest.of(page, size, sort.by(Sort.Direction.fromString(sortDir), sortBy));
 
-        return repository.findAll(pageable)
+        return repository.findAllCustomers(pageable)
                 .map(e -> mapper.map(e, CustomerDTO.class));
     }
 
@@ -94,7 +94,12 @@ public class CustomerServiceImpl implements CustomerService{
 
     @Override
     public void delete(Long id) {
-        repository.deleteById(id);
+    	// 1. Pehle check karo ki exist karta hai ya nahi
+        Customer customer = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+
+        // 2. Agar mil gaya tabhi delete hoga
+        repository.delete(customer);
     }
 
     @Override
@@ -109,10 +114,10 @@ public class CustomerServiceImpl implements CustomerService{
                 .toList();
     }
 
-	@Override
-	public Page<CustomerDTO> getAll(int page, int size) {
-		// TODO Auto-generated method stub
-		return null;
-	}
+//	@Override
+//	public Page<CustomerDTO> getAll(int page, int size) {
+//		// TODO Auto-generated method stub
+//		return null;
+//	}
 	
 }
